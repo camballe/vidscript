@@ -1,6 +1,6 @@
 {
   "name": "vidscript",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "AI-powered CLI tool that transforms video content into intelligent, structured notes and scripts",
   "main": "dist/index.js",
   "type": "module",
@@ -13,7 +13,9 @@
     "dev": "ts-node src/index.ts",
     "test": "jest",
     "lint": "eslint . --ext .ts",
-    "format": "prettier --write \"**/*.{ts,js,json}\""
+    "format": "prettier --write \"**/*.{ts,js,json}\"",
+    "build:bun": "bun run tsc",
+    "prepublishOnly": "tsc"
   },
   "keywords": [
     "video",
@@ -25,7 +27,7 @@
     "content",
     "cli"
   ],
-  "author": "",
+  "author": "Enoch Kambale",
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
@@ -68,5 +70,10 @@
   },
   "engines": {
     "node": ">=16.0.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/camballe/vidscript.git"
+  },
+  "files": ["dist"]
 }
