@@ -14,8 +14,7 @@
     "test": "jest",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write \"**/*.{ts,js,json}\"",
-    "build:bun": "bun run tsc",
-    "prepublishOnly": "tsc"
+    "prepublishOnly": "bun run build"
   },
   "keywords": [
     "video",
@@ -75,7 +74,5 @@
     "type": "git",
     "url": "git+https://github.com/camballe/vidscript.git"
   },
-  "files": [
-    "dist"
-  ]
+  "files": ["dist"]
 }
