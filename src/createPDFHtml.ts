@@ -1,4 +1,3 @@
-//// filepath: src/createPDFHtml.ts
 import fs from "fs";
 import path from "path";
 import puppeteer from "puppeteer";
@@ -6,7 +5,7 @@ import { marked } from "marked";
 
 export async function createPDFfromHTML(
   notes: string,
-  options: { output: string }
+  options: { output: string },
 ): Promise<string> {
   // Convert the raw Markdown notes to HTML using marked
   const htmlBody = marked.parse(notes);
