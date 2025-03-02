@@ -3,7 +3,7 @@
 Transform any video into intelligent, structured notes and scripts with AI.
 
 <p align="center">
-  <img src="./vidscript.png" alt="VidScript" width="350" height="auto">
+  <img src="/vidscript.png" alt="VidScript" width="350" height="auto">
 </p>
 
 <p align="center">
