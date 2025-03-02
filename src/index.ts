@@ -42,7 +42,7 @@ process.stderr.write = ((data: string | Uint8Array) => {
   if (
     strData.includes("onnxruntime") ||
     strData.includes("Removing initializer") ||
-    /\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}\.\d{3}\snode\[\d+:\d+\]/.test(strData)
+    strData.includes("CleanUnusedInitializers")
   ) {
     // Silently drop ONNX warnings
     return true;
@@ -171,9 +171,17 @@ async function processVideo(options: VideoOptions): Promise<string> {
         text: chalk.blue("Transcribing audio content..."),
         spinner: "dots",
       }).start();
-
-      transcript = await transcribeAudio(audioPath);
-      transcribeSpinner.succeed(chalk.green("Transcription completed"));
+      try {
+        transcript = await transcribeAudio(audioPath);
+        transcribeSpinner.succeed(chalk.green("Transcription completed"));
+      } catch (audioError) {
+        transcribeSpinner.warn(
+          chalk.yellow(`Transcription issue: ${(audioError as Error).message}`)
+        );
+        transcript =
+          "[This video appears to have no audio content to transcribe]";
+        transcribeSpinner.succeed(chalk.green("Proceeding without audio"));
+      }
     } catch (audioError) {
       extractSpinner.warn(
         chalk.yellow(`Audio extraction issue: ${(audioError as Error).message}`)
@@ -491,79 +499,54 @@ async function extractAudioFromVideo(videoPath: string): Promise<string> {
  * Transcribe audio using Whisper
  */
 async function transcribeAudio(audioPath: string): Promise<string> {
+  // Temporarily suppress warnings coming from underlying libraries
+  const originalWarn = console.warn;
+  const originalError = console.error;
+  console.warn = () => {};
+  console.error = () => {};
+
   try {
-    // Completely silence warnings during this process
-    const originalWarn = console.warn;
-    const originalError = console.error;
-    console.warn = function () {};
-    console.error = function () {};
-
-    // Initialize the pipeline with the proper model
+    // Initialize the Whisper speech recognition pipeline
     const { pipeline, env } = whisper as any;
-
-    // Set pipeline parameters to avoid browser-only features
     env.allowLocalModels = true;
     env.backends.onnx.wasm.numThreads = 1;
 
-    const loadingSpinner = ora({
-      text: chalk.blue("Loading speech recognition model..."),
-      spinner: "dots",
-    }).start();
-
+    // Load the model (this may take a moment)
     const transcriber = await pipeline(
       "automatic-speech-recognition",
       "Xenova/whisper-tiny.en"
     );
 
-    loadingSpinner.succeed(chalk.green("Speech recognition model loaded"));
-
-    // Process audio file
-    const processingSpinner = ora({
-      text: chalk.blue("Processing audio format..."),
-      spinner: "dots",
-    }).start();
-
     // Convert audio file to raw PCM data
     const tempFile = audioPath + ".pcm";
-
     await new Promise<void>((resolve, reject) => {
       ffmpeg(audioPath)
         .outputOptions([
           "-f",
-          "s16le",
+          "s16le", // raw PCM 16-bit little endian
           "-acodec",
-          "pcm_s16le",
+          "pcm_s16le", // PCM codec
           "-ar",
-          "16000",
+          "16000", // 16 kHz sample rate
           "-ac",
-          "1",
+          "1", // mono channel
         ])
         .output(tempFile)
         .on("end", () => resolve())
-        .on("error", (err) => reject(err))
+        .on("error", (err) =>
+          reject(new Error(`FFmpeg conversion failed: ${err.message}`))
+        )
         .run();
     });
 
-    // Read the raw PCM data
     const buffer = fs.readFileSync(tempFile);
-
-    // Convert PCM buffer to Float32Array
     const floatArray = new Float32Array(buffer.length / 2);
     for (let i = 0; i < floatArray.length; i++) {
       floatArray[i] = buffer.readInt16LE(i * 2) / 32768.0;
     }
+    fs.unlinkSync(tempFile); // clean up temp file
 
-    // Clean up temp file
-    fs.unlinkSync(tempFile);
-    processingSpinner.succeed(chalk.green("Audio processing complete"));
-
-    // Show an elegant spinner for transcription process
-    const transcribeSpinner = ora({
-      text: chalk.blue("Running speech recognition..."),
-      spinner: "dots",
-    }).start();
-
-    // Transcribe with proper parameters
+    // Perform transcription
     const transcriptionResult = await transcriber(floatArray, {
       chunk_length_s: 30,
       stride_length_s: 5,
@@ -571,14 +554,10 @@ async function transcribeAudio(audioPath: string): Promise<string> {
       task: "transcribe",
     });
 
-    // Restore console functions
+    return transcriptionResult.text;
+  } finally {
     console.warn = originalWarn;
     console.error = originalError;
-
-    transcribeSpinner.succeed(chalk.green("Transcription complete"));
-    return transcriptionResult.text;
-  } catch (error: unknown) {
-    throw new Error(`Transcription failed: ${(error as Error).message}`);
   }
 }
 
