@@ -32,35 +32,34 @@ export class UIManager {
   }
 
   public clearScreen(): void {
-    console.clear();
+    process.stdout.write('\x1bc');
   }
 
   public displayLogo(): void {
-    const logo = this.gradients.primary.multiline(`
- __      ___     _               _   _       _            
- \\ \\    / (_)   | |             | \\ | |     | |           
-  \\ \\  / / _  __| | ___  ___    |  \\| | ___ | |_ ___  ___ 
-   \\ \\/ / | |/ _\` |/ _ \\/ _ \\   | . \` |/ _ \\| __/ _ \\/ __|
-    \\  /  | | (_| |  __/ (_) |  | |\\  | (_) | ||  __/\\__ \\
-     \\/   |_|\\__,_|\\___|\\___/   |_| \\_|\\___/ \\__\\___||___/
-    `);
-
-    console.log(logo);
+    const logo = `
+  ██╗   ██╗██╗██████╗ ███████╗ ██████╗██████╗ ██╗██████╗ ████████╗
+  ██║   ██║██║██╔══██╗██╔════╝██╔════╝██╔══██╗██║██╔══██╗╚══██╔══╝
+  ██║   ██║██║██║  ██║███████╗██║     ██████╔╝██║██████╔╝   ██║   
+  ╚██╗ ██╔╝██║██║  ██║╚════██║██║     ██╔══██╗██║██╔═══╝    ██║   
+   ╚████╔╝ ██║██████╔╝███████║╚██████╗██║  ██║██║██║        ██║   
+    ╚═══╝  ╚═╝╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝╚═╝        ╚═╝   
+                                                                  
+    `;
+    console.log(gradient.pastel.multiline(logo));
   }
 
   public displayWelcome(version: string): void {
     console.log(
       boxen(
-        `${chalk.bold.cyan("Video Notes Generator")} ${chalk.dim("v" + version)}\n\n` +
-          `${chalk.blue(figures.pointer)} ${chalk.white("Generate intelligent notes from any video")}`,
+        `Welcome to ${chalk.bold('VidScript')} ${chalk.dim(`v${version}`)}
+
+Transform video content into intelligent, structured notes and scripts
+`,
         {
           padding: 1,
-          margin: { top: 0, right: 1, bottom: 1, left: 1 },
-          borderStyle: "round",
-          borderColor: "cyan",
-          float: "center",
-          title: "✨ Welcome ✨",
-          titleAlignment: "center",
+          margin: 1,
+          borderStyle: 'round',
+          borderColor: 'cyan',
         }
       )
     );
@@ -164,27 +163,31 @@ export class UIManager {
     }
 
     console.log(
-      boxen(content, {
-        padding: 1,
-        margin: { top: 1, bottom: 1 },
-        borderStyle: "round",
-        borderColor: "green",
-        title: title,
-        titleAlignment: "center",
-      })
+      boxen(
+        `${chalk.green(figures.tick)} ${chalk.bold(title)}\n\n${content}`,
+        {
+          padding: 1,
+          borderColor: 'green',
+          borderStyle: 'round',
+          title: 'VidScript Success',
+          titleAlignment: 'center',
+        }
+      )
     );
   }
 
   public showError(title: string, message: string): void {
-    console.error(
-      boxen(chalk.red(`${figures.cross} ${message}`), {
-        padding: 1,
-        margin: { top: 1, bottom: 1 },
-        borderStyle: "round",
-        borderColor: "red",
-        title: title,
-        titleAlignment: "center",
-      })
+    console.log(
+      boxen(
+        `${chalk.red(figures.cross)} ${chalk.bold(title)}\n\n${message}`,
+        {
+          padding: 1,
+          borderColor: 'red',
+          borderStyle: 'round',
+          title: 'VidScript Error',
+          titleAlignment: 'center',
+        }
+      )
     );
   }
 

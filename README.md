@@ -1,108 +1,277 @@
-# VideoNotes AI
+# VidScript
 
-An AI-powered CLI tool that transforms video content into intelligent, structured notes.
+Transform any video into intelligent, structured notes and scripts with AI.
 
-![VideoNotes AI](https://via.placeholder.com/800x200/0073e6/ffffff?text=VideoNotes+AI)
+<p align="center">
+  <img src="https://via.placeholder.com/800x200/6a0dad/ffffff?text=VidScript" alt="VidScript Banner">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/version-1.0.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+  <img src="https://img.shields.io/badge/node-%3E%3D16.0.0-brightgreen" alt="Node">
+</p>
 
 > **Status:**  
-> This project is in its early stages and is actively maintained. Please note that you may encounter bugs as new features are added and improvements are made. Contributions and feedback are highly encouraged to help shape the future of this project.
+> This project is actively maintained and continuously improving. We welcome contributions and feedback to help shape the future of VidScript.
 
-## Features
+## 🚀 Features
 
-- **Process Any Video Source** - Local video files or YouTube URLs
-- **AI-Powered Notes** - Generate intelligent notes, not just raw transcripts
-- **Multiple Formats** - Choose between detailed, concise, or bullet-point notes
-- **Language Support** - Generate notes in various languages
-- **Model Selection** - Use either Claude or GPT-4 for note generation
-- **Beautiful PDFs** - Get well-formatted PDF output with proper styling and structure
+- **📹 Process Any Video Source** - Works with local files or YouTube URLs
+- **🧠 AI-Powered Analysis** - Generate intelligent notes, not just raw transcripts
+- **📝 Multiple Formats** - Choose detailed, concise, or bullet-point notes
+- **🌍 Language Support** - Generate notes in various languages
+- **🤖 Model Selection** - Use Claude or GPT-4 for superior quality
+- **📄 Beautiful PDFs** - Get well-formatted PDF output with proper styling
+- **⚡ Fast Processing** - Efficient handling of even lengthy videos
+- **🔒 Privacy Focused** - All processing happens on your machine
 
-## Installation
+## 📋 Table of Contents
+
+- [Installation](#-installation)
+- [Prerequisites](#-prerequisites)
+- [Setup](#-setup)
+- [Usage](#-usage)
+- [Examples](#-examples)
+- [How It Works](#-how-it-works)
+- [Advanced Configuration](#-advanced-configuration)
+- [Troubleshooting](#-troubleshooting)
+- [FAQ](#-faq)
+- [Contributing](#-contributing)
+- [License](#-license)
+
+## 📦 Installation
 
 ```bash
 # Install globally
-npm install -g video-notes-generator
+npm install -g vidscript
 
 # Or use with npx
-npx video-notes-generator
+npx vidscript
 ```
 
-## Prerequisites
+## 🔧 Prerequisites
 
-- Node.js 16 or higher
-- FFmpeg installed on your system
-- API keys for Anthropic and/or OpenAI (depending on your preference)
+- **Node.js 16+** - The runtime environment for VidScript
+- **FFmpeg** - Required for video processing
+- **API Keys** - You'll need API keys from:
+  - Anthropic Claude (recommended)
+  - OpenAI (alternative option)
 
-## Setup
+### Installing FFmpeg
+
+<details>
+<summary>MacOS</summary>
+
+```bash
+# Using Homebrew
+brew install ffmpeg
+```
+</details>
+
+<details>
+<summary>Windows</summary>
+
+```bash
+# Using Chocolatey
+choco install ffmpeg
+
+# Using Scoop
+scoop install ffmpeg
+```
+</details>
+
+<details>
+<summary>Linux</summary>
+
+```bash
+# Ubuntu/Debian
+sudo apt update && sudo apt install ffmpeg
+
+# CentOS/RHEL
+sudo yum install ffmpeg
+
+# Arch Linux
+sudo pacman -S ffmpeg
+```
+</details>
+
+## 🔌 Setup
 
 1. Run the initialization command to set up your configuration:
 
 ```bash
-video-notes init
+vidscript init
 ```
 
-2. Follow the prompts to provide your API keys.
+2. Follow the prompts to provide your API keys and configure default settings.
 
-## Usage
+## 💻 Usage
 
-### Basic Usage
-
-Generate notes from a YouTube video:
+### Basic Command
 
 ```bash
-video-notes generate -i "https://www.youtube.com/watch?v=EXAMPLE" -o ./my-notes
-```
-
-Generate notes from a local video file:
-
-```bash
-video-notes generate -i "/path/to/your/video.mp4"
+vidscript generate -i <video-source> [options]
 ```
 
 ### Command Options
 
-```
-Options:
-  -i, --input <path>       Path to video file or YouTube URL
-  -o, --output <path>      Output directory for the PDF (default: ./notes)
-  -m, --model <model>      AI model to use (claude or gpt4) (default: "claude")
-  -l, --language <lang>    Language of the notes (default: "english")
-  -f, --format <format>    Notes format (detailed, concise, bullet) (default: "detailed")
-  -h, --help               Display help information
-```
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-i, --input <path>` | Path to video file or YouTube URL | *Required* |
+| `-o, --output <path>` | Output directory for the notes | `./notes` |
+| `-m, --model <model>` | AI model to use (claude/gpt4) | `claude` |
+| `-l, --language <lang>` | Language of the notes | `english` |
+| `-f, --format <format>` | Notes format (detailed/concise/bullet) | `detailed` |
+| `-h, --help` | Display help information | - |
 
-### Examples
+## 📚 Examples
 
-Generate concise notes using GPT-4:
-
-```bash
-video-notes generate -i "https://youtu.be/EXAMPLE" -m gpt4 -f concise
-```
-
-Generate notes in Spanish with bullet points:
+### Generate Notes from YouTube
 
 ```bash
-video-notes generate -i "./lecture.mp4" -l spanish -f bullet
+vidscript generate -i "https://www.youtube.com/watch?v=EXAMPLE"
 ```
 
-## System Check
+### Process Local Video with Options
+
+```bash
+vidscript generate -i "/path/to/lecture.mp4" -m gpt4 -f concise -l spanish
+```
+
+### System Check
 
 Verify your system setup:
 
 ```bash
-video-notes check
+vidscript check
 ```
 
-## How It Works
+## ⚙️ How It Works
 
-1. **Video Processing**: Extract the audio from the input video
-2. **Transcription**: Convert the speech to text using Whisper
-3. **AI Analysis**: Process the transcript to generate intelligent notes
-4. **PDF Creation**: Format the notes into a clean, structured PDF document
+1. **Video Processing**
+   - Extract audio from the source video
+   - For YouTube URLs, the video is downloaded first
 
-## Contributing
+2. **Transcription**
+   - The audio is processed using a local Whisper model
+   - No data is sent to external services during transcription
 
-Contributions are welcome and highly appreciated. Since this project is still early in its development, you may encounter issues or incomplete features. Please submit any bugs, feature requests, or pull requests to help improve the project and drive innovation.
+3. **AI Analysis**
+   - The transcript is analyzed by the selected AI model (Claude/GPT-4)
+   - Content is organized into structured notes based on your preferences
 
-## License
+4. **Output Generation**
+   - Notes are formatted into a clean, professional PDF
+   - All output is saved to your specified directory
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+## 🛠️ Advanced Configuration
+
+### Environment Variables
+
+You can set the following environment variables instead of using the init command:
+
+```bash
+# API Keys
+ANTHROPIC_API_KEY=your_api_key_here
+OPENAI_API_KEY=your_api_key_here
+
+# Default Settings
+VIDSCRIPT_DEFAULT_MODEL=claude
+VIDSCRIPT_DEFAULT_FORMAT=detailed
+VIDSCRIPT_DEFAULT_LANGUAGE=english
+```
+
+### Custom Templates
+
+VidScript supports custom PDF templates. Place your templates in:
+
+```
+~/.vidscript/templates/
+```
+
+## ❓ Troubleshooting
+
+### Common Issues
+
+<details>
+<summary>YouTube downloads failing</summary>
+
+This is usually due to YouTube changing their API. Try updating VidScript to the latest version:
+
+```bash
+npm update -g vidscript
+```
+</details>
+
+<details>
+<summary>FFmpeg errors</summary>
+
+Make sure FFmpeg is installed and available in your PATH. Run:
+
+```bash
+ffmpeg -version
+```
+
+If not found, follow the installation instructions in the Prerequisites section.
+</details>
+
+<details>
+<summary>API key issues</summary>
+
+Re-run the initialization:
+
+```bash
+vidscript init
+```
+
+Or manually check your keys in `~/.vidscript/config.json`
+</details>
+
+## 📝 FAQ
+
+<details>
+<summary>How much do the API calls cost?</summary>
+
+Costs vary depending on the length of video and model used. As a rough estimate:
+- 10-minute video: ~$0.05-0.15 with Claude, ~$0.10-0.30 with GPT-4
+- 1-hour video: ~$0.30-0.90 with Claude, ~$0.60-1.80 with GPT-4
+</details>
+
+<details>
+<summary>Can I use this for commercial purposes?</summary>
+
+Yes! VidScript is licensed under MIT. However, be aware of the terms of service for the AI providers (Anthropic & OpenAI) when using their APIs.
+</details>
+
+<details>
+<summary>How does VidScript handle long videos?</summary>
+
+VidScript processes videos in chunks, making it capable of handling videos of any length. For very long videos (2+ hours), the process may take some time and use more API tokens.
+</details>
+
+## 👥 Contributing
+
+Contributions are welcome! Here's how you can help:
+
+1. **Report bugs** by opening an issue
+2. **Suggest features** that would make VidScript more valuable
+3. **Submit pull requests** to help implement fixes or features
+
+Please read our [Contributing Guidelines](CONTRIBUTING.md) before submitting pull requests.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+<p align="center">
+  Made with ❤️ by the VidScript team
+</p>
+
+<p align="center">
+  <a href="https://github.com/yourusername/vidscript">GitHub</a> •
+  <a href="https://github.com/yourusername/vidscript/issues">Report Bug</a> •
+  <a href="https://github.com/yourusername/vidscript/issues">Request Feature</a>
+</p>

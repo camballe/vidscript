@@ -1,11 +1,11 @@
 {
-  "name": "video-notes-generator",
+  "name": "vidscript",
   "version": "1.0.0",
-  "description": "AI-powered CLI tool that generates intelligent notes from videos",
+  "description": "AI-powered CLI tool that transforms video content into intelligent, structured notes and scripts",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
-    "video-notes": "./dist/src/index.js"
+    "vidscript": "./dist/src/index.js"
   },
   "scripts": {
     "start": "node dist/src/index.js",
@@ -17,11 +17,13 @@
   },
   "keywords": [
     "video",
+    "transcription",
     "notes",
     "ai",
-    "transcription",
-    "cli",
-    "summarization"
+    "summarization",
+    "script",
+    "content",
+    "cli"
   ],
   "author": "",
   "license": "MIT",

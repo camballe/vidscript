@@ -75,6 +75,12 @@ const displayIntro = (): void => {
   ui.displayWelcome(pkg.version);
 };
 
+// Set up the CLI program
+program
+  .name("vidscript")
+  .description("Transform video content into intelligent, structured notes and scripts")
+  .version(pkg.version);
+
 /**
  * Process video file or URL and generate notes
  */
@@ -814,12 +820,16 @@ async function createPDF(
   }
 }
 
-// Update the generate command
+// Commands
 program
   .command("generate")
-  .description("Generate notes from a video file or URL")
-  .option("-i, --input <path>", "Path to video file or YouTube URL")
-  .option("-o, --output <path>", "Output directory for the PDF")
+  .description("Generate notes from a video file or YouTube URL")
+  .requiredOption("-i, --input <path>", "Path to video file or YouTube URL")
+  .option(
+    "-o, --output <path>",
+    "Output directory for the PDF",
+    "./notes"
+  )
   .option(
     "-m, --model <model>",
     "AI model to use (claude-3-opus, claude-3.5-sonnet, claude-3.7-sonnet, gpt-4-turbo, gpt-4o)",
@@ -874,10 +884,9 @@ program
     }
   });
 
-// Update the init command
 program
   .command("init")
-  .description("Initialize configuration file")
+  .description("Set up your VidScript configuration")
   .action(async () => {
     try {
       displayIntro();
@@ -930,10 +939,9 @@ OPENAI_API_KEY=${answers.openaiKey}
     }
   });
 
-// Update the check command
 program
   .command("check")
-  .description("Check if all dependencies are properly installed")
+  .description("Check your system for required dependencies")
   .action(async () => {
     ui.startSpinner("Checking dependencies...");
 
@@ -963,7 +971,7 @@ program
       } else {
         ui.spinnerFail("Anthropic API key is not configured");
         console.log(
-          chalk.yellow('Run "video-notes init" to configure API keys')
+          chalk.yellow('Run "vidscript init" to configure API keys')
         );
       }
 
@@ -976,6 +984,7 @@ program
       }
 
       ui.showSuccess("System Check", "System check completed successfully");
+      console.log(chalk.green(`${figures.tick} VidScript is ready to use!`));
     } catch (error: unknown) {
       ui.showError(
         "Error",
