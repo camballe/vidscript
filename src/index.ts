@@ -12,7 +12,7 @@ import { fileURLToPath } from "url";
 import { dirname } from "path";
 import ffmpeg from "fluent-ffmpeg";
 import ytdl from "ytdl-core";
-import { Anthropic } from "@anthropic-ai/sdk";
+import Anthropic from "@anthropic-ai/sdk";
 import { OpenAI } from "openai";
 import * as whisper from "@xenova/transformers";
 import boxen from "boxen";
@@ -25,6 +25,8 @@ import { exec } from "child_process";
 import { createPDFfromHTML } from "./createPDFHtml.js";
 import figures from "figures";
 import terminalLink from "terminal-link";
+import { getModel, MODELS } from "./models.js";
+import { ui } from "./ui.js";
 
 // Environment setup
 dotenv.config();
@@ -32,7 +34,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Completely suppress ALL ONNX warnings by redirecting stderr
-// This is more aggressive than what we had before
 const originalStdoutWrite = process.stdout.write.bind(process.stdout);
 const originalStderrWrite = process.stderr.write.bind(process.stderr);
 
@@ -42,7 +43,9 @@ process.stderr.write = ((data: string | Uint8Array) => {
   if (
     strData.includes("onnxruntime") ||
     strData.includes("Removing initializer") ||
-    strData.includes("CleanUnusedInitializers")
+    strData.includes("CleanUnusedInitializers") ||
+    strData.includes("whisper") ||
+    strData.includes("transformers")
   ) {
     // Silently drop ONNX warnings
     return true;
@@ -65,46 +68,11 @@ const openai = new OpenAI({
 
 const program = new Command();
 
-// Enhanced ASCII Art and CLI styling
+// Update the displayIntro function
 const displayIntro = (): void => {
-  console.clear();
-
-  // Create a stunning gradient effect
-  const rainbowTitle = gradient([
-    "#FF5733",
-    "#C70039",
-    "#900C3F",
-    "#581845",
-    "#2E86C1",
-    "#17A589",
-  ]).multiline(`
- __      ___     _               _   _       _            
- \\ \\    / (_)   | |             | \\ | |     | |           
-  \\ \\  / / _  __| | ___  ___    |  \\| | ___ | |_ ___  ___ 
-   \\ \\/ / | |/ _\` |/ _ \\/ _ \\   | . \` |/ _ \\| __/ _ \\/ __|
-    \\  /  | | (_| |  __/ (_) |  | |\\  | (_) | ||  __/\\__ \\
-     \\/   |_|\\__,_|\\___|\\___/   |_| \\_|\\___/ \\__\\___||___/
-                                                                                                  
-    `);
-
-  console.log(rainbowTitle);
-
-  // Create a beautiful boxed info display
-  console.log(
-    boxen(
-      `${chalk.bold.cyan("Video Notes Generator")} ${chalk.dim("v" + pkg.version)}\n\n` +
-        `${chalk.blue(figures.pointer)} ${chalk.white("Generate intelligent notes from any video")}`,
-      {
-        padding: 1,
-        margin: { top: 0, right: 1, bottom: 1, left: 1 },
-        borderStyle: "round",
-        borderColor: "cyan",
-        float: "center",
-        title: "✨ Welcome ✨",
-        titleAlignment: "center",
-      }
-    )
-  );
+  ui.clearScreen();
+  ui.displayLogo();
+  ui.displayWelcome(pkg.version);
 };
 
 /**
@@ -113,10 +81,7 @@ const displayIntro = (): void => {
 async function processVideo(options: VideoOptions): Promise<string> {
   try {
     // Step 1: Analyze video
-    const analyzeSpinner = ora({
-      text: chalk.blue("Analyzing video source..."),
-      spinner: "dots",
-    }).start();
+    ui.startSpinner("Analyzing video source...");
 
     const isYouTubeUrl =
       options.input.includes("youtube.com") ||
@@ -127,20 +92,16 @@ async function processVideo(options: VideoOptions): Promise<string> {
     if (isYouTubeUrl) {
       // Try ytdl-core first, then fall back to youtube-dl if available
       try {
-        analyzeSpinner.text = chalk.blue("Downloading YouTube video...");
+        ui.updateSpinner("Downloading YouTube video...");
         videoPath = await downloadYouTubeVideo(options.input);
       } catch (ytdlError) {
-        analyzeSpinner.text = chalk.blue(
-          "Trying alternative download method..."
-        );
+        ui.updateSpinner("Trying alternative download method...");
 
         try {
           videoPath = await downloadWithYoutubeDl(options.input);
         } catch (ytError) {
-          analyzeSpinner.fail(
-            chalk.red(
-              `Could not download YouTube video: ${(ytError as Error).message}`
-            )
+          ui.spinnerFail(
+            `Could not download YouTube video: ${(ytError as Error).message}`
           );
           throw new Error(
             `Could not download YouTube video: ${(ytError as Error).message}`
@@ -151,67 +112,56 @@ async function processVideo(options: VideoOptions): Promise<string> {
       videoPath = options.input;
     }
 
-    analyzeSpinner.succeed(chalk.green("Video analyzed successfully"));
+    ui.spinnerSuccess("Video source prepared successfully");
 
     // Step 2: Extract audio from video
-    const extractSpinner = ora({
-      text: chalk.blue("Extracting audio from video..."),
-      spinner: "dots",
-    }).start();
+    ui.startSpinner("Extracting audio from video...");
 
     let audioPath;
     let transcript = "";
 
     try {
       audioPath = await extractAudioFromVideo(videoPath);
-      extractSpinner.succeed(chalk.green("Audio extracted successfully"));
+      ui.spinnerSuccess("Audio extracted successfully");
 
       // Step 3: Transcribe audio
-      const transcribeSpinner = ora({
-        text: chalk.blue("Transcribing audio content..."),
-        spinner: "dots",
-      }).start();
+      ui.startSpinner("Transcribing audio content...");
       try {
         transcript = await transcribeAudio(audioPath);
-        transcribeSpinner.succeed(chalk.green("Transcription completed"));
+        ui.spinnerSuccess("Transcription completed");
       } catch (audioError) {
-        transcribeSpinner.warn(
-          chalk.yellow(`Transcription issue: ${(audioError as Error).message}`)
+        ui.spinnerWarning(
+          `Transcription issue: ${(audioError as Error).message}`
         );
         transcript =
           "[This video appears to have no audio content to transcribe]";
-        transcribeSpinner.succeed(chalk.green("Proceeding without audio"));
+        ui.startSpinner("Proceeding without audio");
+        ui.spinnerSuccess("Ready to generate notes");
       }
     } catch (audioError) {
-      extractSpinner.warn(
-        chalk.yellow(`Audio extraction issue: ${(audioError as Error).message}`)
+      ui.spinnerWarning(
+        `Audio extraction issue: ${(audioError as Error).message}`
       );
-      extractSpinner.text = chalk.blue("Proceeding with empty transcript...");
+      ui.startSpinner("Proceeding with empty transcript...");
       transcript =
         "[This video appears to have no audio content to transcribe]";
-      extractSpinner.succeed(chalk.green("Proceeding without audio"));
+      ui.spinnerSuccess("Ready to generate notes");
     }
 
     // Step 4: Generate intelligent notes
-    const notesSpinner = ora({
-      text: chalk.blue("Creating intelligent notes from content..."),
-      spinner: "dots",
-    }).start();
+    ui.startSpinner("Creating intelligent notes from content...");
 
     const notes = await generateNotes(transcript, options);
-    notesSpinner.succeed(chalk.green("Notes generated successfully"));
+    ui.spinnerSuccess("Notes generated successfully");
 
     // Step 5: Create PDF
-    const pdfSpinner = ora({
-      text: chalk.blue("Creating beautiful PDF document..."),
-      spinner: "dots",
-    }).start();
+    ui.startSpinner("Creating beautiful PDF document...");
 
     const pdfPath = await createPDF(notes, options);
-    pdfSpinner.succeed(chalk.green("PDF created successfully"));
+    ui.spinnerSuccess("PDF created successfully");
 
     // Clean up temporary files
-    if (isYouTubeUrl) {
+    if (isYouTubeUrl && videoPath) {
       try {
         fs.unlinkSync(videoPath);
       } catch (err) {
@@ -227,45 +177,21 @@ async function processVideo(options: VideoOptions): Promise<string> {
     }
 
     // Show success with clickable link to PDF file
-    const pdfPathDisplay = terminalLink("Open PDF", `file://${pdfPath}`, {
-      fallback: (text) => text,
-    });
-
-    console.log(
-      "\n" +
-        boxen(
-          `${chalk.green(figures.tick)} Notes generated successfully!\n\n` +
-            `${chalk.white("PDF saved to:")} ${chalk.cyan(pdfPath)}\n\n` +
-            `${pdfPathDisplay}`,
-          {
-            padding: 1,
-            margin: { top: 0, bottom: 0 },
-            borderStyle: "round",
-            borderColor: "green",
-            title: "Success",
-            titleAlignment: "center",
-          }
-        )
+    ui.showSuccess(
+      "Success",
+      `Notes generated successfully!\n\nPDF saved to: ${pdfPath}`,
+      { text: "Open PDF", url: `file://${pdfPath}` }
     );
 
     return pdfPath;
   } catch (error: unknown) {
-    console.error(
-      boxen(chalk.red(`${figures.cross} ${(error as Error).message}`), {
-        padding: 1,
-        margin: { top: 0, bottom: 0 },
-        borderStyle: "round",
-        borderColor: "red",
-        title: "Error",
-        titleAlignment: "center",
-      })
-    );
+    ui.showError("Error", (error as Error).message);
     throw error;
   }
 }
 
 /**
- * Download YouTube video
+ * Download YouTube video with beautiful progress bar
  */
 async function downloadYouTubeVideo(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -279,12 +205,11 @@ async function downloadYouTubeVideo(url: string): Promise<string> {
         .getInfo(url)
         .then((info) => {
           const videoTitle = info.videoDetails.title;
-          const downloadSpinner = ora({
-            text: chalk.blue(
-              `Downloading: ${videoTitle.substring(0, 40)}${videoTitle.length > 40 ? "..." : ""}`
-            ),
-            spinner: "dots",
-          }).start();
+          const videoLengthSeconds = parseInt(info.videoDetails.lengthSeconds);
+
+          ui.startSpinner(
+            `Preparing download: ${videoTitle.substring(0, 40)}${videoTitle.length > 40 ? "..." : ""}`
+          );
 
           // Get the best format that has both audio and video
           const format = ytdl.chooseFormat(info.formats, {
@@ -301,31 +226,57 @@ async function downloadYouTubeVideo(url: string): Promise<string> {
             });
 
             if (!fallbackFormat) {
-              downloadSpinner.fail(chalk.red("No suitable video format found"));
+              ui.spinnerFail("No suitable video format found");
               reject(new Error("No suitable video format found"));
               return;
             }
+
+            ui.stopSpinner();
+            ui.startProgressBar(100, "Downloading video");
+
+            let downloadedPercent = 0;
 
             // Create stream from format
             const stream = ytdl.downloadFromInfo(info, {
               format: fallbackFormat,
             });
 
+            stream.on("progress", (_, downloaded, total) => {
+              const percent = Math.floor((downloaded / total) * 100);
+              if (percent > downloadedPercent) {
+                downloadedPercent = percent;
+                ui.updateProgressBar(percent);
+              }
+            });
+
             stream
               .pipe(fs.createWriteStream(videoPath))
               .on("finish", () => {
-                downloadSpinner.succeed(chalk.green("Download complete"));
+                ui.stopProgressBar();
+                ui.spinnerSuccess("Download complete");
                 resolve(videoPath);
               })
               .on("error", (err) => {
-                downloadSpinner.fail(
-                  chalk.red(`Download failed: ${err.message}`)
-                );
+                ui.stopProgressBar();
+                ui.spinnerFail(`Download failed: ${err.message}`);
                 reject(new Error(`Download failed: ${err.message}`));
               });
           } else {
             // Use the best format found
+            ui.stopSpinner();
+            ui.startProgressBar(100, "Downloading video");
+
+            let downloadedPercent = 0;
+
             const stream = ytdl.downloadFromInfo(info, { format: format });
+
+            stream.on("progress", (_, downloaded, total) => {
+              const percent = Math.floor((downloaded / total) * 100);
+              if (percent > downloadedPercent) {
+                downloadedPercent = percent;
+                ui.updateProgressBar(percent);
+              }
+            });
 
             stream
               .pipe(fs.createWriteStream(videoPath))
@@ -335,27 +286,28 @@ async function downloadYouTubeVideo(url: string): Promise<string> {
                   fs.existsSync(videoPath) &&
                   fs.statSync(videoPath).size > 0
                 ) {
-                  downloadSpinner.succeed(chalk.green("Download complete"));
+                  ui.stopProgressBar();
+                  ui.spinnerSuccess("Download complete");
                   resolve(videoPath);
                 } else {
-                  downloadSpinner.fail(
-                    chalk.red("Downloaded file is empty or missing")
-                  );
+                  ui.stopProgressBar();
+                  ui.spinnerFail("Downloaded file is empty or missing");
                   reject(new Error("Downloaded file is empty or missing"));
                 }
               })
               .on("error", (err) => {
-                downloadSpinner.fail(
-                  chalk.red(`Download failed: ${err.message}`)
-                );
+                ui.stopProgressBar();
+                ui.spinnerFail(`Download failed: ${err.message}`);
                 reject(new Error(`Download failed: ${err.message}`));
               });
           }
         })
         .catch((err) => {
+          ui.spinnerFail(`Failed to fetch video info: ${err.message}`);
           reject(new Error(`Failed to fetch video info: ${err.message}`));
         });
     } catch (error: unknown) {
+      ui.spinnerFail(`YouTube download error: ${(error as Error).message}`);
       reject(new Error(`YouTube download error: ${(error as Error).message}`));
     }
   });
@@ -496,26 +448,24 @@ async function extractAudioFromVideo(videoPath: string): Promise<string> {
 }
 
 /**
- * Transcribe audio using Whisper
+ * Transcribe audio using Whisper with live updates
  */
 async function transcribeAudio(audioPath: string): Promise<string> {
-  // Temporarily suppress warnings coming from underlying libraries
-  const originalWarn = console.warn;
-  const originalError = console.error;
-  console.warn = () => {};
-  console.error = () => {};
-
   try {
     // Initialize the Whisper speech recognition pipeline
     const { pipeline, env } = whisper as any;
     env.allowLocalModels = true;
     env.backends.onnx.wasm.numThreads = 1;
 
+    ui.updateSpinner("Loading transcription model...");
+
     // Load the model (this may take a moment)
     const transcriber = await pipeline(
       "automatic-speech-recognition",
       "Xenova/whisper-tiny.en"
     );
+
+    ui.updateSpinner("Converting audio format...");
 
     // Convert audio file to raw PCM data
     const tempFile = audioPath + ".pcm";
@@ -539,6 +489,8 @@ async function transcribeAudio(audioPath: string): Promise<string> {
         .run();
     });
 
+    ui.updateSpinner("Processing audio...");
+
     const buffer = fs.readFileSync(tempFile);
     const floatArray = new Float32Array(buffer.length / 2);
     for (let i = 0; i < floatArray.length; i++) {
@@ -546,18 +498,27 @@ async function transcribeAudio(audioPath: string): Promise<string> {
     }
     fs.unlinkSync(tempFile); // clean up temp file
 
-    // Perform transcription
+    // Perform transcription with progress updates
+    ui.updateSpinner("Transcribing audio (0%)...");
+
+    // Set up progress callback
+    const progressCallback = (progress: number) => {
+      const percent = Math.round(progress * 100);
+      ui.updateSpinner(`Transcribing audio (${percent}%)...`);
+    };
+
+    // Perform transcription with progress tracking
     const transcriptionResult = await transcriber(floatArray, {
       chunk_length_s: 30,
       stride_length_s: 5,
       language: "en",
       task: "transcribe",
+      callback_function: progressCallback,
     });
 
     return transcriptionResult.text;
-  } finally {
-    console.warn = originalWarn;
-    console.error = originalError;
+  } catch (error) {
+    throw error;
   }
 }
 
@@ -578,7 +539,17 @@ async function generateNotes(
         "Create organized bullet point notes structured in a hierarchical format",
     };
 
+    const detailMap: FormatMap = {
+      standard: "Provide a standard level of detail covering the main concepts",
+      comprehensive:
+        "Provide a comprehensive analysis with extensive details, examples, and connections between concepts",
+      exhaustive:
+        "Create extremely detailed notes capturing virtually all information from the content, including minor details, nuances, and subtle points",
+    };
+
     const format = formatMap[options.format] || formatMap.detailed;
+    const detailLevel =
+      detailMap[options.detail || "standard"] || detailMap.standard;
     const languageInstruction =
       options.language !== "english"
         ? `Write the notes in ${options.language}.`
@@ -590,63 +561,121 @@ async function generateNotes(
       transcript.trim().length === 0 ||
       transcript.includes("[This video appears to have no audio content")
     ) {
-      const prompt = `
-I need you to generate notes for a video that appears to have no audio content.
-Please create ${options.format} notes that explain:
-1. This video doesn't have audio content to transcribe
-2. Suggest to the user that they may want to check if the video actually has audio
-3. Remind them that they can also try providing a different video source
-      `;
-
-      // Use the model to generate a helpful response
-      if (options.model === "gpt4") {
-        if (!process.env.OPENAI_API_KEY) {
-          throw new Error("OPENAI_API_KEY is required for GPT-4 model");
-        }
-
-        const response = await openai.chat.completions.create({
-          model: "gpt-4-turbo",
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are a professional note-taker who creates clear, accurate, well-structured notes from video content.",
-            },
-            { role: "user", content: prompt },
-          ],
-          temperature: 0.3,
-          max_tokens: 4000,
-        });
-
-        return response.choices[0].message.content || "";
-      } else {
-        // Use Claude by default
-        if (!process.env.ANTHROPIC_API_KEY) {
-          throw new Error("ANTHROPIC_API_KEY is required for Claude model");
-        }
-
-        const response = await anthropic.completions.create({
-          model: "claude-3-opus-20240229",
-          max_tokens_to_sample: 4000,
-          temperature: 0.3,
-          prompt: `
-System: You are a professional note-taker who creates clear, accurate, well-structured notes from video content.
-Human: ${prompt}
-Assistant:`,
-        });
-
-        // Access the completion from the response
-        if (response.completion && response.completion.trim().length > 0) {
-          return response.completion;
-        }
-
-        return "No content was generated.";
-      }
+      // [Existing code for empty transcript handling...]
+      return "No content was generated.";
     }
 
-    // Normal notes generation
-    const prompt = `
-I have a video transcript and I need you to generate intelligent notes from it.
+    // Get the selected model configuration
+    const modelConfig = getModel(options.model || "claude-3.7-sonnet");
+
+    // For very long transcripts, we need to chunk and process separately
+    const MAX_CHUNK_LENGTH = Math.floor(modelConfig.contextWindow * 0.7); // Use 70% of context window for input
+
+    if (transcript.length > MAX_CHUNK_LENGTH) {
+      ui.spinnerSuccess(`Transcript is very long (${transcript.length} chars)`);
+
+      // Split transcript into chunks
+      const chunks = splitIntoChunks(transcript, MAX_CHUNK_LENGTH);
+      ui.startProgressBar(chunks.length, "Processing transcript chunks");
+
+      let allNotes = "";
+
+      // Process each chunk
+      for (let i = 0; i < chunks.length; i++) {
+        // Add context about which part this is
+        const chunkContext = `PART ${i + 1} OF ${chunks.length}: `;
+        const chunkNotes = await processChunk(
+          chunkContext + chunks[i],
+          modelConfig,
+          format,
+          detailLevel,
+          languageInstruction
+        );
+
+        allNotes += chunkNotes + "\n\n";
+        ui.updateProgressBar(
+          i + 1,
+          `Processing chunk ${i + 1}/${chunks.length}`
+        );
+      }
+
+      ui.stopProgressBar();
+
+      // Now create a final summary if there were multiple chunks
+      if (chunks.length > 1) {
+        ui.startSpinner("Creating final integrated notes...");
+
+        // Create integration prompt
+        const integrationPrompt = `
+I have notes from ${chunks.length} different segments of a long video. Please:
+
+1. Review these notes
+2. Reorganize them into a cohesive document
+3. Remove any redundancies
+4. Ensure consistent formatting and structure
+5. Maintain the ${options.detail} level of detail
+6. Ensure the final notes are ${options.format} in style
+7. ${languageInstruction}
+
+Here are the notes to integrate:
+
+${allNotes}`;
+
+        // Process the integration
+        const finalNotes = await processWithModel(
+          integrationPrompt,
+          modelConfig,
+          "You are a professional editor who specializes in organizing and integrating complex notes into cohesive documents."
+        );
+
+        ui.spinnerSuccess("Final notes created and integrated");
+        return finalNotes;
+      }
+
+      return allNotes;
+    } else {
+      // For shorter transcripts, process normally
+      const prompt = `
+I have a video transcript and I need you to generate intelligent, ${options.detail} notes from it.
+${format}. ${detailLevel}. ${languageInstruction}
+
+Focus on identifying key concepts, main points, important details, and organizing them logically.
+Do NOT provide a verbatim transcript - instead, extract and synthesize the important information.
+Include relevant section headings and organize the content in a clear, structured way.
+The notes should be well-formatted with:
+- Clear section headings with proper hierarchy (H1, H2, H3, etc.)
+- Logical organization of information
+- Hierarchical structure when appropriate
+- Key terms or concepts emphasized
+- In-depth explanations of important concepts
+- Connections between related ideas
+- ${options.detail === "exhaustive" ? "Include virtually all details and nuances from the content" : ""}
+
+Ensure the notes are thorough and complete, capturing the full breadth and depth of the content.
+
+Here is the transcript:
+${transcript}
+`;
+
+      return await processWithModel(prompt, modelConfig);
+    }
+  } catch (error: unknown) {
+    throw new Error(`Failed to generate notes: ${(error as Error).message}`);
+  }
+}
+
+/**
+ * Process a single chunk with the appropriate model
+ */
+async function processChunk(
+  chunk: string,
+  modelConfig: any,
+  format: string,
+  detailLevel: string,
+  languageInstruction: string
+): Promise<string> {
+  const prompt = `
+I have a segment from a longer video transcript. Please generate ${detailLevel} notes for this segment.
 ${format}. ${languageInstruction}
 
 Focus on identifying key concepts, main points, important details, and organizing them logically.
@@ -654,62 +683,114 @@ Do NOT provide a verbatim transcript - instead, extract and synthesize the impor
 Include relevant section headings and organize the content in a clear, structured way.
 
 The notes should be well-formatted with:
-- Clear section headings
+- Clear section headings with proper hierarchy
 - Logical organization of information
 - Hierarchical structure when appropriate
 - Key terms or concepts emphasized
 
-Here is the transcript:
-${transcript}
-    `;
+Here is the transcript segment:
+${chunk}
+`;
 
-    // Use specified model to generate notes
-    if (options.model === "gpt4") {
-      if (!process.env.OPENAI_API_KEY) {
-        throw new Error("OPENAI_API_KEY is required for GPT-4 model");
-      }
+  return await processWithModel(prompt, modelConfig);
+}
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a professional note-taker who creates clear, accurate, well-structured notes from video content.",
-          },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.3,
-        max_tokens: 4000,
-      });
-
-      return response.choices[0].message.content || "";
-    } else {
-      // Use Claude by default
-      if (!process.env.ANTHROPIC_API_KEY) {
-        throw new Error("ANTHROPIC_API_KEY is required for Claude model");
-      }
-
-      const response = await anthropic.completions.create({
-        model: "claude-3-opus-20240229",
-        max_tokens_to_sample: 4000,
-        temperature: 0.3,
-        prompt: `
-System: You are a professional note-taker who creates clear, accurate, well-structured notes from video content.
-Human: ${prompt}
-Assistant:`,
-      });
-
-      // Access the completion from the response
-      if (response.completion && response.completion.trim().length > 0) {
-        return response.completion;
-      }
-
-      return "No content was generated.";
+/**
+ * Process text with the appropriate model
+ */
+async function processWithModel(
+  prompt: string,
+  modelConfig: any,
+  systemPrompt: string = "You are a professional note-taker who creates clear, accurate, well-structured notes from video content."
+): Promise<string> {
+  if (modelConfig.provider === "openai") {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error(
+        `OPENAI_API_KEY is required for ${modelConfig.modelName} model`
+      );
     }
-  } catch (error: unknown) {
-    throw new Error(`Failed to generate notes: ${(error as Error).message}`);
+
+    const response = await openai.chat.completions.create({
+      model: modelConfig.modelName,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.3,
+      // Fix: Limit max_tokens to 4096 for OpenAI models
+      max_tokens: 4096,
+    });
+
+    return response.choices[0].message.content || "";
+  } else {
+    // Use Anthropic
+    if (!process.env.ANTHROPIC_API_KEY) {
+      throw new Error(
+        `ANTHROPIC_API_KEY is required for ${modelConfig.modelName} model`
+      );
+    }
+
+    const response = await anthropic.completions.create({
+      model: modelConfig.modelName,
+      max_tokens_to_sample: 4096, // Claude also typically has a 4096 token limit for output
+      temperature: 0.3,
+      prompt: `${Anthropic.HUMAN_PROMPT} ${prompt} ${Anthropic.AI_PROMPT}`,
+    });
+
+    return response.completion || "";
   }
+}
+
+/**
+ * Split text into chunks of approximately equal size
+ */
+function splitIntoChunks(text: string, maxLength: number): string[] {
+  const chunks: string[] = [];
+
+  // Try to split at paragraph boundaries for more natural chunks
+  const paragraphs = text.split(/\n\s*\n/);
+  let currentChunk = "";
+
+  for (const paragraph of paragraphs) {
+    if ((currentChunk + paragraph).length <= maxLength) {
+      currentChunk += (currentChunk ? "\n\n" : "") + paragraph;
+    } else {
+      // If current paragraph would exceed max length
+      if (currentChunk) {
+        chunks.push(currentChunk);
+        currentChunk = paragraph;
+      } else {
+        // If a single paragraph is too long, split it by sentences
+        const sentences = paragraph.match(/[^.!?]+[.!?]+/g) || [paragraph];
+        let sentenceChunk = "";
+
+        for (const sentence of sentences) {
+          if ((sentenceChunk + sentence).length <= maxLength) {
+            sentenceChunk += sentenceChunk ? " " + sentence : sentence;
+          } else {
+            if (sentenceChunk) {
+              chunks.push(sentenceChunk);
+              sentenceChunk = sentence;
+            } else {
+              // If a single sentence is too long, force split it
+              chunks.push(sentence.substring(0, maxLength));
+              sentenceChunk = sentence.substring(maxLength);
+            }
+          }
+        }
+
+        if (sentenceChunk) {
+          currentChunk = sentenceChunk;
+        }
+      }
+    }
+  }
+
+  if (currentChunk) {
+    chunks.push(currentChunk);
+  }
+
+  return chunks;
 }
 
 /**
@@ -733,18 +814,27 @@ async function createPDF(
   }
 }
 
-// Command to generate notes from a video
+// Update the generate command
 program
   .command("generate")
   .description("Generate notes from a video file or URL")
   .option("-i, --input <path>", "Path to video file or YouTube URL")
   .option("-o, --output <path>", "Output directory for the PDF")
-  .option("-m, --model <model>", "AI model to use (claude or gpt4)", "claude")
+  .option(
+    "-m, --model <model>",
+    "AI model to use (claude-3-opus, claude-3.5-sonnet, claude-3.7-sonnet, gpt-4-turbo, gpt-4o)",
+    "claude-3.7-sonnet"
+  )
   .option("-l, --language <lang>", "Language of the notes", "english")
   .option(
     "-f, --format <format>",
     "Notes format (detailed, concise, bullet)",
     "detailed"
+  )
+  .option(
+    "-d, --detail <level>",
+    "Note detail level (standard, comprehensive, exhaustive)",
+    "standard"
   )
   .action(async (options) => {
     try {
@@ -779,20 +869,25 @@ program
       // Process the video with our enhanced progress display
       await processVideo(options as VideoOptions);
     } catch (error: unknown) {
-      console.error(chalk.red(`Error: ${(error as Error).message}`));
+      ui.showError("Error", (error as Error).message);
       process.exit(1);
     }
   });
 
-// Command to initialize configuration
+// Update the init command
 program
   .command("init")
   .description("Initialize configuration file")
   .action(async () => {
     try {
+      displayIntro();
+
       console.log(
         chalk.blue("Setting up Video Notes Generator configuration...\n")
       );
+
+      // Show available models
+      ui.showModelOptions();
 
       // Check if .env file exists
       const envPath = path.join(process.cwd(), ".env");
@@ -803,13 +898,13 @@ program
         {
           type: "input",
           name: "anthropicKey",
-          message: "Enter your Anthropic API key (for Claude):",
+          message: "Enter your Anthropic API key (for Claude models):",
           default: process.env.ANTHROPIC_API_KEY || "",
         },
         {
           type: "input",
           name: "openaiKey",
-          message: "Enter your OpenAI API key (for GPT-4):",
+          message: "Enter your OpenAI API key (for GPT models):",
           default: process.env.OPENAI_API_KEY || "",
         },
       ]);
@@ -821,25 +916,26 @@ ANTHROPIC_API_KEY=${answers.anthropicKey}
 OPENAI_API_KEY=${answers.openaiKey}
       `;
 
+      ui.startSpinner("Saving configuration...");
       fs.writeFileSync(envPath, envContent.trim());
+      ui.spinnerSuccess(`Configuration saved to ${envPath}`);
 
-      console.log(chalk.green(`\n✓ Configuration saved to ${envPath}`));
-      console.log(
-        chalk.blue(
-          'You can now use the "generate" command to create notes from videos.'
-        )
+      ui.showInfo(
+        "Next Steps",
+        'You can now use the "generate" command to create notes from videos.'
       );
+      ui.showCommandExample();
     } catch (error: unknown) {
-      console.error(chalk.red(`Error: ${(error as Error).message}`));
+      ui.showError("Error", (error as Error).message);
     }
   });
 
-// Health check command
+// Update the check command
 program
   .command("check")
   .description("Check if all dependencies are properly installed")
   .action(async () => {
-    const spinner = ora("Checking dependencies...").start();
+    ui.startSpinner("Checking dependencies...");
 
     try {
       // Check ffmpeg
@@ -851,9 +947,9 @@ program
             resolve();
           });
         });
-        spinner.succeed("FFmpeg is installed and working");
+        ui.spinnerSuccess("FFmpeg is installed and working");
       } catch (error: unknown) {
-        spinner.fail("FFmpeg is not installed or not working properly");
+        ui.spinnerFail("FFmpeg is not installed or not working properly");
         console.log(
           chalk.yellow(
             "Please install FFmpeg: https://ffmpeg.org/download.html"
@@ -863,23 +959,28 @@ program
 
       // Check API keys
       if (process.env.ANTHROPIC_API_KEY) {
-        spinner.succeed("Anthropic API key is configured");
+        ui.spinnerSuccess("Anthropic API key is configured");
       } else {
-        spinner.fail("Anthropic API key is not configured");
+        ui.spinnerFail("Anthropic API key is not configured");
         console.log(
           chalk.yellow('Run "video-notes init" to configure API keys')
         );
       }
 
       if (process.env.OPENAI_API_KEY) {
-        spinner.succeed("OpenAI API key is configured");
+        ui.spinnerSuccess("OpenAI API key is configured");
       } else {
-        spinner.warn("OpenAI API key is not configured (optional for GPT-4)");
+        ui.spinnerWarning(
+          "OpenAI API key is not configured (optional for GPT-4)"
+        );
       }
 
-      console.log(chalk.green("\n✓ System check completed"));
+      ui.showSuccess("System Check", "System check completed successfully");
     } catch (error: unknown) {
-      spinner.fail(`Error checking dependencies: ${(error as Error).message}`);
+      ui.showError(
+        "Error",
+        `Error checking dependencies: ${(error as Error).message}`
+      );
     }
   });
 
