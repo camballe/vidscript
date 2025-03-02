@@ -18,6 +18,7 @@ import * as whisper from "@xenova/transformers";
 import boxen from "boxen";
 import gradient from "gradient-string";
 import updateNotifier from "update-notifier";
+import os from "os";
 // Update import assertion to use "with" instead of "assert"
 import pkg from "../package.json" with { type: "json" };
 import { VideoOptions, FormatMap } from "./types.js";
@@ -167,11 +168,21 @@ async function processVideo(options: VideoOptions): Promise<string> {
 
     // Extract audio from video
     spinner.text = "Extracting audio...";
-    const audioPath = await extractAudioFromVideo(videoPath);
+    let audioPath;
+    let transcript = "";
 
-    // Transcribe audio
-    spinner.text = "Transcribing audio...";
-    const transcript = await transcribeAudio(audioPath);
+    try {
+      audioPath = await extractAudioFromVideo(videoPath);
+
+      // Transcribe audio
+      spinner.text = "Transcribing audio...";
+      transcript = await transcribeAudio(audioPath);
+    } catch (audioError) {
+      spinner.warn(`Audio extraction issue: ${(audioError as Error).message}`);
+      spinner.text = "Proceeding with empty transcript...";
+      transcript =
+        "[This video appears to have no audio content to transcribe]";
+    }
 
     // Generate intelligent notes
     spinner.text = "Generating intelligent notes...";
@@ -189,10 +200,12 @@ async function processVideo(options: VideoOptions): Promise<string> {
         console.warn("Could not clean up video file");
       }
     }
-    try {
-      fs.unlinkSync(audioPath);
-    } catch (err) {
-      console.warn("Could not clean up audio file");
+    if (audioPath) {
+      try {
+        fs.unlinkSync(audioPath);
+      } catch (err) {
+        console.warn("Could not clean up audio file");
+      }
     }
 
     spinner.succeed(`Notes generated successfully at ${chalk.green(pdfPath)}`);
@@ -318,16 +331,90 @@ async function downloadWithYoutubeDl(
  */
 async function extractAudioFromVideo(videoPath: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const audioPath = videoPath.replace(/\.[^/.]+$/, "") + ".mp3";
+    // First check if the video has an audio stream
+    ffmpeg.ffprobe(videoPath, (err, metadata) => {
+      if (err) {
+        reject(new Error(`Failed to probe video file: ${err.message}`));
+        return;
+      }
 
-    ffmpeg(videoPath)
-      .outputOptions("-ab", "128k")
-      .output(audioPath)
-      .on("end", () => resolve(audioPath))
-      .on("error", (err) =>
-        reject(new Error(`Failed to extract audio: ${err.message}`))
-      )
-      .run();
+      // Check if the video has any audio streams
+      const audioStreams = metadata.streams.filter(
+        (stream) => stream.codec_type === "audio"
+      );
+
+      if (audioStreams.length === 0) {
+        console.log(
+          "Video has no audio streams. Creating empty audio file for processing."
+        );
+
+        // Create an empty audio file (1 second of silence)
+        const timestamp = Date.now();
+        const randomSuffix = Math.floor(Math.random() * 10000);
+        const audioFileName = `audio_${timestamp}_${randomSuffix}.mp3`;
+        const audioPath = path.join(os.tmpdir(), audioFileName);
+
+        ffmpeg()
+          .input("anullsrc")
+          .inputOptions(["-f", "lavfi"])
+          .audioCodec("libmp3lame")
+          .audioBitrate("128k")
+          .duration(1)
+          .format("mp3")
+          .on("error", (err) => {
+            reject(
+              new Error(`Failed to create empty audio file: ${err.message}`)
+            );
+          })
+          .on("end", () => {
+            resolve(audioPath);
+          })
+          .save(audioPath);
+
+        return;
+      }
+
+      // Video has audio streams, proceed with extraction
+      const timestamp = Date.now();
+      const randomSuffix = Math.floor(Math.random() * 10000);
+      const audioFileName = `audio_${timestamp}_${randomSuffix}.mp3`;
+      const audioPath = path.join(os.tmpdir(), audioFileName);
+
+      // Ensure temp directory is writable
+      try {
+        const audioDir = path.dirname(audioPath);
+        if (!fs.existsSync(audioDir)) {
+          fs.mkdirSync(audioDir, { recursive: true });
+        }
+        fs.accessSync(audioDir, fs.constants.W_OK);
+      } catch (err) {
+        reject(
+          new Error(`No write permission to temp directory: ${os.tmpdir()}`)
+        );
+        return;
+      }
+
+      ffmpeg(videoPath)
+        .noVideo()
+        .audioCodec("libmp3lame")
+        .audioBitrate("128k")
+        .format("mp3")
+        .outputOptions("-y")
+        .on("error", (err, stdout, stderr) => {
+          console.error("FFmpeg stderr:", stderr);
+          reject(new Error(`Failed to extract audio: ${err.message}`));
+        })
+        .on("end", () => {
+          if (fs.existsSync(audioPath) && fs.statSync(audioPath).size > 0) {
+            resolve(audioPath);
+          } else {
+            reject(
+              new Error("FFmpeg completed but output file is missing or empty")
+            );
+          }
+        })
+        .save(audioPath);
+    });
   });
 }
 
@@ -446,6 +533,67 @@ async function generateNotes(
         ? `Write the notes in ${options.language}.`
         : "";
 
+    // Handle empty or missing transcript
+    if (
+      !transcript ||
+      transcript.trim().length === 0 ||
+      transcript.includes("[This video appears to have no audio content")
+    ) {
+      const prompt = `
+I need you to generate notes for a video that appears to have no audio content.
+Please create ${options.format} notes that explain:
+1. This video doesn't have audio content to transcribe
+2. Suggest to the user that they may want to check if the video actually has audio
+3. Remind them that they can also try providing a different video source
+      `;
+
+      // Use the model to generate a helpful response
+      if (options.model === "gpt4") {
+        if (!process.env.OPENAI_API_KEY) {
+          throw new Error("OPENAI_API_KEY is required for GPT-4 model");
+        }
+
+        const response = await openai.chat.completions.create({
+          model: "gpt-4-turbo",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a professional note-taker who creates clear, accurate, well-structured notes from video content.",
+            },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.3,
+          max_tokens: 4000,
+        });
+
+        return response.choices[0].message.content || "";
+      } else {
+        // Use Claude by default
+        if (!process.env.ANTHROPIC_API_KEY) {
+          throw new Error("ANTHROPIC_API_KEY is required for Claude model");
+        }
+
+        const response = await anthropic.completions.create({
+          model: "claude-3-opus-20240229",
+          max_tokens_to_sample: 4000,
+          temperature: 0.3,
+          prompt: `
+System: You are a professional note-taker who creates clear, accurate, well-structured notes from video content.
+Human: ${prompt}
+Assistant:`,
+        });
+
+        // Access the completion from the response
+        if (response.completion && response.completion.trim().length > 0) {
+          return response.completion;
+        }
+
+        return "No content was generated.";
+      }
+    }
+
+    // Rest of the existing generateNotes function...
     const prompt = `
 I have a video transcript and I need you to generate intelligent notes from it.
 ${format}. ${languageInstruction}
