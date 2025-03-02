@@ -3,7 +3,7 @@
 Transform any video into intelligent, structured notes and scripts with AI.
 
 <p align="center">
-  <img src="./vidscript.jpg" alt="VidScript">
+  <img src="./vidscript.png" alt="VidScript">
 </p>
 
 <p align="center">
@@ -67,6 +67,7 @@ npx vidscript
 # Using Homebrew
 brew install ffmpeg
 ```
+
 </details>
 
 <details>
@@ -79,6 +80,7 @@ choco install ffmpeg
 # Using Scoop
 scoop install ffmpeg
 ```
+
 </details>
 
 <details>
@@ -94,6 +96,7 @@ sudo yum install ffmpeg
 # Arch Linux
 sudo pacman -S ffmpeg
 ```
+
 </details>
 
 ## 🔌 Setup
@@ -116,14 +119,14 @@ vidscript generate -i <video-source> [options]
 
 ### Command Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `-i, --input <path>` | Path to video file or YouTube URL | *Required* |
-| `-o, --output <path>` | Output directory for the notes | `./notes` |
-| `-m, --model <model>` | AI model to use (claude/gpt4) | `claude` |
-| `-l, --language <lang>` | Language of the notes | `english` |
+| Option                  | Description                            | Default    |
+| ----------------------- | -------------------------------------- | ---------- |
+| `-i, --input <path>`    | Path to video file or YouTube URL      | _Required_ |
+| `-o, --output <path>`   | Output directory for the notes         | `./notes`  |
+| `-m, --model <model>`   | AI model to use (claude/gpt4)          | `claude`   |
+| `-l, --language <lang>` | Language of the notes                  | `english`  |
 | `-f, --format <format>` | Notes format (detailed/concise/bullet) | `detailed` |
-| `-h, --help` | Display help information | - |
+| `-h, --help`            | Display help information               | -          |
 
 ## 📚 Examples
 
@@ -150,14 +153,17 @@ vidscript check
 ## ⚙️ How It Works
 
 1. **Video Processing**
+
    - Extract audio from the source video
    - For YouTube URLs, the video is downloaded first
 
 2. **Transcription**
+
    - The audio is processed using a local Whisper model
    - No data is sent to external services during transcription
 
 3. **AI Analysis**
+
    - The transcript is analyzed by the selected AI model (Claude/GPT-4)
    - Content is organized into structured notes based on your preferences
 
@@ -202,6 +208,7 @@ This is usually due to YouTube changing their API. Try updating VidScript to the
 ```bash
 npm update -g vidscript
 ```
+
 </details>
 
 <details>
@@ -214,6 +221,7 @@ ffmpeg -version
 ```
 
 If not found, follow the installation instructions in the Prerequisites section.
+
 </details>
 
 <details>
@@ -226,6 +234,7 @@ vidscript init
 ```
 
 Or manually check your keys in `~/.vidscript/config.json`
+
 </details>
 
 ## 📝 FAQ
@@ -234,6 +243,7 @@ Or manually check your keys in `~/.vidscript/config.json`
 <summary>How much do the API calls cost?</summary>
 
 Costs vary depending on the length of video and model used. As a rough estimate:
+
 - 10-minute video: ~$0.05-0.15 with Claude, ~$0.10-0.30 with GPT-4
 - 1-hour video: ~$0.30-0.90 with Claude, ~$0.60-1.80 with GPT-4
 </details>
@@ -242,12 +252,14 @@ Costs vary depending on the length of video and model used. As a rough estimate:
 <summary>Can I use this for commercial purposes?</summary>
 
 Yes! VidScript is licensed under MIT. However, be aware of the terms of service for the AI providers (Anthropic & OpenAI) when using their APIs.
+
 </details>
 
 <details>
 <summary>How does VidScript handle long videos?</summary>
 
 VidScript processes videos in chunks, making it capable of handling videos of any length. For very long videos (2+ hours), the process may take some time and use more API tokens.
+
 </details>
 
 ## 👥 Contributing
