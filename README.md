@@ -1,10 +1,10 @@
 # VidScript
 
-AI-powered CLI tool that transforms video content into intelligent, structured notes and scripts.
+AI-powered CLI tool that transforms video content into intelligent, structured notes.
 
 ## Overview
 
-VidScript is a powerful command line tool that processes video files or YouTube videos and generates well-structured notes using AI. It extracts audio, transcribes speech, and leverages advanced AI models to organize content into coherent notes and scripts. Built with TypeScript and modern AI technologies, it offers a seamless experience for content creators, students, and professionals.
+VidScript is a powerful command line tool that processes video files or YouTube videos and generates well-structured notes using AI. It extracts audio, transcribes speech, and leverages advanced AI models to organize content into coherent notes. Built with TypeScript and modern AI technologies, it offers a seamless experience for content creators, students, and professionals.
 
 ## Features
 
@@ -64,8 +64,8 @@ vidscript generate -i "https://www.youtube.com/watch?v=EXAMPLE" -o ./my-notes
 # Process a local video file
 vidscript generate -i "/path/to/video.mp4"
 
-# Generate a script with specific settings
-vidscript generate -i "video_source" -m claude -f script -l english
+# Generate notes with specific settings
+vidscript generate -i "video.mp4" -m claude-3-opus -f detailed -l english -d comprehensive
 ```
 
 ### Command Options
@@ -88,16 +88,6 @@ vidscript generate -i "video_source" -m claude -f script -l english
 1. **Vector Analysis**: Enable deep content analysis for long videos
 ```bash
 vidscript generate -i "video.mp4" --vector-store --vector-store-index custom-index
-```
-
-2. **Custom Formatting**: Generate specialized formats
-```bash
-vidscript generate -i "source" -f script --template custom
-```
-
-3. **Batch Processing**: Handle multiple videos
-```bash
-vidscript batch -d "./videos" -o "./notes"
 ```
 
 ## Project Structure
