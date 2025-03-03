@@ -70,21 +70,24 @@ vidscript generate -i "video_source" -m claude -f script -l english
 
 ### Command Options
 
-| Option                  | Description                                | Default    |
-|------------------------|--------------------------------------------|------------|
-| `-i, --input <path>`   | Video file path or YouTube URL             | _Required_ |
-| `-o, --output <path>`  | Output directory for generated files       | `./notes`  |
-| `-m, --model <model>`  | AI model (claude/gpt4)                     | `claude`   |
-| `-l, --language <lang>`| Output language                            | `english`  |
-| `-f, --format <format>`| Output format (detailed/concise/bullet/script)| `detailed` |
-| `-v, --vector`         | Enable vector database for analysis        | `false`    |
-| `-h, --help`           | Display help information                   | -          |
+| Option                           | Description                                | Default    |
+|--------------------------------|--------------------------------------------|------------|
+| `-i, --input <path>`            | Video file path or YouTube URL             | _Required_ |
+| `-o, --output <path>`           | Output directory for generated files       | `./notes`  |
+| `-m, --model <model>`           | AI model (claude-3-opus, claude-3.5-sonnet, claude-3.7-sonnet, gpt-4-turbo, gpt-4)| `claude-3.7-sonnet` |
+| `-l, --language <lang>`         | Output language                            | `english`  |
+| `-f, --format <format>`         | Output format (detailed/concise/bullet)    | `detailed` |
+| `-d, --detail <level>`          | Note detail level (standard/comprehensive/exhaustive)| `standard` |
+| `--vector-store`                | Enable vector store for long transcripts   | `false`    |
+| `--vector-store-index <name>`   | Vector store index name                    | `vidscript`|
+| `--vector-store-namespace <ns>` | Vector store namespace                     | `default`  |
+| `-h, --help`                    | Display help information                   | -          |
 
 ### Advanced Features
 
-1. **Vector Analysis**: Enable deep content analysis
+1. **Vector Analysis**: Enable deep content analysis for long videos
 ```bash
-vidscript generate -i "source" -v
+vidscript generate -i "video.mp4" --vector-store --vector-store-index custom-index
 ```
 
 2. **Custom Formatting**: Generate specialized formats
