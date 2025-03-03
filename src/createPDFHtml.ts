@@ -2,10 +2,11 @@ import fs from "fs";
 import path from "path";
 import puppeteer from "puppeteer";
 import { marked } from "marked";
+import { PDFOptions } from "./types.js";
 
 export async function createPDFfromHTML(
   notes: string,
-  options: { output: string },
+  options: PDFOptions
 ): Promise<string> {
   // Convert the raw Markdown notes to HTML using marked
   const htmlBody = marked.parse(notes);
@@ -20,6 +21,7 @@ export async function createPDFfromHTML(
       <style>
         @page {
           margin: 50px;
+          size: A4;
         }
         body {
           font-family: Helvetica, Arial, sans-serif;
@@ -42,11 +44,14 @@ export async function createPDFfromHTML(
         }
         main {
           margin: 0 50px;
+          column-count: 1;
+          column-gap: 40px;
         }
         h1, h2, h3, h4, h5, h6 {
           color: #333;
           margin-top: 20px;
           margin-bottom: 10px;
+          break-after: avoid;
         }
         p {
           margin: 0 0 10px;
@@ -56,6 +61,17 @@ export async function createPDFfromHTML(
           margin: 10px 0 10px 20px;
           padding: 0;
           list-style-type: disc;
+        }
+        @media print {
+          .page-break {
+            break-before: page;
+          }
+          h1, h2, h3 {
+            break-after: avoid;
+          }
+          ul, ol {
+            break-inside: avoid;
+          }
         }
       </style>
     </head>

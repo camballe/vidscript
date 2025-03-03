@@ -1,10 +1,15 @@
 export interface VideoOptions {
   input: string;
   output: string;
-  model: string;
-  language: string;
-  format: string;
-  detail: string; // New option for controlling detail level
+  model?: string;
+  language?: string;
+  format?: "detailed" | "concise" | "bullet";
+  detail?: "standard" | "comprehensive" | "exhaustive";
+  vectorStore?: {
+    enabled: boolean;
+    indexName?: string;
+    namespace?: string;
+  };
 }
 
 export interface FormatMap {
@@ -17,4 +22,8 @@ export interface ModelMap {
     modelName: string;
     contextWindow: number;
   };
+}
+
+export interface PDFOptions {
+  output: string;
 }

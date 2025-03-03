@@ -1,93 +1,155 @@
 # VidScript
 
-AI-powered CLI tool that transforms video content into intelligent, structured notes.
+AI-powered CLI tool that transforms video content into intelligent, structured notes and scripts.
 
 ## Overview
 
-VidScript is a command line tool that processes video files or YouTube videos and generates well-structured notes using AI. It extracts audio, transcribes speech, and uses AI models to organize content into coherent notes.
+VidScript is a powerful command line tool that processes video files or YouTube videos and generates well-structured notes using AI. It extracts audio, transcribes speech, and leverages advanced AI models to organize content into coherent notes and scripts. Built with TypeScript and modern AI technologies, it offers a seamless experience for content creators, students, and professionals.
 
-## Installation
+## Features
 
-```bash
-# Install globally
-npm install -g vidscript
-
-# Or use with npx
-npx vidscript
-```
+- 🎥 Support for both local video files and YouTube URLs
+- 🤖 Multiple AI model options (Anthropic's Claude, OpenAI's GPT-4)
+- 🌐 Multi-language support for transcription and notes
+- 📝 Multiple output formats (detailed, concise, bullet points)
+- 📊 Vector database integration for enhanced content analysis
+- 🎨 Beautiful PDF output with customizable formatting
+- ⚡ Fast processing with modern async operations
+- 🔄 Progress tracking and status updates
+- 🛠️ System compatibility checking
 
 ## Prerequisites
 
 - Node.js 16 or higher
 - FFmpeg installed on your system
-- API keys for Anthropic and/or OpenAI
+- API keys for:
+  - Anthropic (Claude)
+  - OpenAI (optional, for GPT-4)
+  - Pinecone (for vector storage)
+
+## Installation
+
+```bash
+# Install globally using npm
+npm install -g vidscript
+
+# Or use with npx
+npx vidscript
+
+# Or install using Bun
+bun install -g vidscript
+```
 
 ## Setup
 
-1. Run the initialization command to set up your configuration:
-
+1. Run the initialization command:
 ```bash
 vidscript init
 ```
 
-2. Follow the prompts to provide your API keys.
+2. Follow the prompts to configure:
+   - AI model preferences
+   - API keys
+   - Default output settings
+   - Vector database settings
 
 ## Usage
 
 ### Basic Commands
 
 ```bash
-# Generate notes from a YouTube video
+# Process a YouTube video
 vidscript generate -i "https://www.youtube.com/watch?v=EXAMPLE" -o ./my-notes
 
-# Generate notes from a local video file
-vidscript generate -i "/path/to/your/video.mp4"
+# Process a local video file
+vidscript generate -i "/path/to/video.mp4"
+
+# Generate a script with specific settings
+vidscript generate -i "video_source" -m claude -f script -l english
 ```
 
 ### Command Options
 
-| Option                  | Description                              | Default    |
-| ----------------------- | ---------------------------------------- | ---------- |
-| `-i, --input <path>`    | Path to video file or YouTube URL        | _Required_ |
-| `-o, --output <path>`   | Output directory for the PDF             | `./notes`  |
-| `-m, --model <model>`   | AI model to use (claude or gpt4)         | `claude`   |
-| `-l, --language <lang>` | Language of the notes                    | `english`  |
-| `-f, --format <format>` | Notes format (detailed, concise, bullet) | `detailed` |
-| `-h, --help`            | Display help information                 | -          |
+| Option                  | Description                                | Default    |
+|------------------------|--------------------------------------------|------------|
+| `-i, --input <path>`   | Video file path or YouTube URL             | _Required_ |
+| `-o, --output <path>`  | Output directory for generated files       | `./notes`  |
+| `-m, --model <model>`  | AI model (claude/gpt4)                     | `claude`   |
+| `-l, --language <lang>`| Output language                            | `english`  |
+| `-f, --format <format>`| Output format (detailed/concise/bullet/script)| `detailed` |
+| `-v, --vector`         | Enable vector database for analysis        | `false`    |
+| `-h, --help`           | Display help information                   | -          |
 
-### Examples
+### Advanced Features
 
-Generate concise notes using GPT-4:
-
+1. **Vector Analysis**: Enable deep content analysis
 ```bash
-vidscript generate -i "https://youtu.be/EXAMPLE" -m gpt4 -f concise
+vidscript generate -i "source" -v
 ```
 
-Generate notes in Spanish with bullet points:
-
+2. **Custom Formatting**: Generate specialized formats
 ```bash
-vidscript generate -i "./lecture.mp4" -l spanish -f bullet
+vidscript generate -i "source" -f script --template custom
 ```
 
-### System Check
-
-Verify your system setup:
-
+3. **Batch Processing**: Handle multiple videos
 ```bash
-vidscript check
+vidscript batch -d "./videos" -o "./notes"
 ```
 
-## How It Works
+## Project Structure
 
-1. **Video Processing**: Extract audio from the input video (or download YouTube video first)
-2. **Transcription**: Convert speech to text using Whisper
-3. **AI Analysis**: Process the transcript to generate structured notes
-4. **PDF Creation**: Format the notes into a clean, structured PDF document
+```
+vidscript/
+├── src/
+│   ├── index.ts         # Main application logic
+│   ├── models.ts        # AI model integrations
+│   ├── types.ts         # TypeScript type definitions
+│   ├── ui.ts           # CLI interface components
+│   ├── vectorStore.ts   # Vector database operations
+│   └── createPDFHtml.ts # PDF generation logic
+├── dist/               # Compiled JavaScript output
+└── public/            # Static assets
+```
+
+## Development
+
+```bash
+# Install dependencies
+npm install
+
+# Run in development mode
+npm run dev
+
+# Build the project
+npm run build
+
+# Run tests
+npm test
+
+# Lint code
+npm run lint
+
+# Format code
+npm run format
+```
 
 ## Contributing
 
-Contributions are welcome. Please feel free to submit issues or pull requests to help improve the project.
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Author
+
+Enoch Kambale
+
+## Support
+
+For issues and feature requests, please use the [GitHub issues page](https://github.com/camballe/vidscript/issues).

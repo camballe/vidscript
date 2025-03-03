@@ -27,6 +27,7 @@ import figures from "figures";
 import terminalLink from "terminal-link";
 import { getModel, MODELS } from "./models.js";
 import { ui } from "./ui.js";
+import { VectorStore } from "./vectorStore.js";
 
 // Environment setup
 dotenv.config();
@@ -78,7 +79,9 @@ const displayIntro = (): void => {
 // Set up the CLI program
 program
   .name("vidscript")
-  .description("Transform video content into intelligent, structured notes and scripts")
+  .description(
+    "Transform video content into intelligent, structured notes and scripts"
+  )
   .version(pkg.version);
 
 /**
@@ -553,9 +556,8 @@ async function generateNotes(
         "Create extremely detailed notes capturing virtually all information from the content, including minor details, nuances, and subtle points",
     };
 
-    const format = formatMap[options.format] || formatMap.detailed;
-    const detailLevel =
-      detailMap[options.detail || "standard"] || detailMap.standard;
+    const format = formatMap[options.format || "detailed"];
+    const detailLevel = detailMap[options.detail || "standard"];
     const languageInstruction =
       options.language !== "english"
         ? `Write the notes in ${options.language}.`
@@ -567,78 +569,90 @@ async function generateNotes(
       transcript.trim().length === 0 ||
       transcript.includes("[This video appears to have no audio content")
     ) {
-      // [Existing code for empty transcript handling...]
       return "No content was generated.";
     }
 
     // Get the selected model configuration
     const modelConfig = getModel(options.model || "claude-3.7-sonnet");
 
-    // For very long transcripts, we need to chunk and process separately
-    const MAX_CHUNK_LENGTH = Math.floor(modelConfig.contextWindow * 0.7); // Use 70% of context window for input
+    // For very long transcripts, use vector store if enabled
+    if (options.vectorStore?.enabled) {
+      ui.spinnerSuccess(
+        `Using vector store for long transcript (${transcript.length} chars)`
+      );
 
-    if (transcript.length > MAX_CHUNK_LENGTH) {
-      ui.spinnerSuccess(`Transcript is very long (${transcript.length} chars)`);
+      // Initialize vector store
+      const vectorStore = new VectorStore({
+        indexName: options.vectorStore.indexName || "vidscript",
+        namespace: options.vectorStore.namespace || "default",
+      });
 
-      // Split transcript into chunks
-      const chunks = splitIntoChunks(transcript, MAX_CHUNK_LENGTH);
-      ui.startProgressBar(chunks.length, "Processing transcript chunks");
+      // Store transcript chunks
+      await vectorStore.storeTranscript(transcript, {
+        format: options.format,
+        detail: options.detail,
+        language: options.language,
+      });
 
-      let allNotes = "";
+      // Generate initial outline
+      const outlinePrompt = `
+Create a detailed outline for comprehensive video notes. The outline should:
+1. Cover all major topics and subtopics
+2. Follow a logical progression
+3. Include placeholders for examples and details
+4. Be structured for ${options.format} format
+5. Target a ${options.detail} level of detail
+6. ${languageInstruction}
 
-      // Process each chunk
-      for (let i = 0; i < chunks.length; i++) {
-        // Add context about which part this is
-        const chunkContext = `PART ${i + 1} OF ${chunks.length}: `;
-        const chunkNotes = await processChunk(
-          chunkContext + chunks[i],
-          modelConfig,
-          format,
-          detailLevel,
-          languageInstruction
-        );
+Use this outline to organize the content from the video transcript.
+`;
 
-        allNotes += chunkNotes + "\n\n";
+      const outline = await processWithModel(outlinePrompt, modelConfig);
+
+      // Use the outline to query relevant chunks and generate detailed notes
+      const outlinePoints = outline
+        .split("\n")
+        .filter((line) => line.trim())
+        .map((line) => line.replace(/^[#\-*.\s]+/, "").trim());
+
+      let fullNotes = "";
+      ui.startProgressBar(outlinePoints.length, "Generating detailed notes");
+
+      for (let i = 0; i < outlinePoints.length; i++) {
+        const point = outlinePoints[i];
+        const relevantChunks = await vectorStore.query(point, 3);
+
+        const contextText = relevantChunks
+          .map((chunk) => chunk.text)
+          .join("\n\n");
+        const sectionPrompt = `
+Generate detailed notes for the following section: "${point}"
+
+Use this transcript context:
+${contextText}
+
+The notes should:
+1. Be highly detailed and comprehensive
+2. Include specific examples and explanations
+3. Match the ${options.format} format
+4. Provide ${options.detail} level of detail
+5. ${languageInstruction}
+`;
+
+        const sectionNotes = await processWithModel(sectionPrompt, modelConfig);
+        fullNotes += sectionNotes + "\n\n";
         ui.updateProgressBar(
           i + 1,
-          `Processing chunk ${i + 1}/${chunks.length}`
+          `Processing section ${i + 1}/${outlinePoints.length}`
         );
       }
 
       ui.stopProgressBar();
 
-      // Now create a final summary if there were multiple chunks
-      if (chunks.length > 1) {
-        ui.startSpinner("Creating final integrated notes...");
+      // Clean up vector store
+      await vectorStore.clear();
 
-        // Create integration prompt
-        const integrationPrompt = `
-I have notes from ${chunks.length} different segments of a long video. Please:
-
-1. Review these notes
-2. Reorganize them into a cohesive document
-3. Remove any redundancies
-4. Ensure consistent formatting and structure
-5. Maintain the ${options.detail} level of detail
-6. Ensure the final notes are ${options.format} in style
-7. ${languageInstruction}
-
-Here are the notes to integrate:
-
-${allNotes}`;
-
-        // Process the integration
-        const finalNotes = await processWithModel(
-          integrationPrompt,
-          modelConfig,
-          "You are a professional editor who specializes in organizing and integrating complex notes into cohesive documents."
-        );
-
-        ui.spinnerSuccess("Final notes created and integrated");
-        return finalNotes;
-      }
-
-      return allNotes;
+      return fullNotes;
     } else {
       // For shorter transcripts, process normally
       const prompt = `
@@ -668,37 +682,6 @@ ${transcript}
   } catch (error: unknown) {
     throw new Error(`Failed to generate notes: ${(error as Error).message}`);
   }
-}
-
-/**
- * Process a single chunk with the appropriate model
- */
-async function processChunk(
-  chunk: string,
-  modelConfig: any,
-  format: string,
-  detailLevel: string,
-  languageInstruction: string
-): Promise<string> {
-  const prompt = `
-I have a segment from a longer video transcript. Please generate ${detailLevel} notes for this segment.
-${format}. ${languageInstruction}
-
-Focus on identifying key concepts, main points, important details, and organizing them logically.
-Do NOT provide a verbatim transcript - instead, extract and synthesize the important information.
-Include relevant section headings and organize the content in a clear, structured way.
-
-The notes should be well-formatted with:
-- Clear section headings with proper hierarchy
-- Logical organization of information
-- Hierarchical structure when appropriate
-- Key terms or concepts emphasized
-
-Here is the transcript segment:
-${chunk}
-`;
-
-  return await processWithModel(prompt, modelConfig);
 }
 
 /**
@@ -748,58 +731,6 @@ async function processWithModel(
 }
 
 /**
- * Split text into chunks of approximately equal size
- */
-function splitIntoChunks(text: string, maxLength: number): string[] {
-  const chunks: string[] = [];
-
-  // Try to split at paragraph boundaries for more natural chunks
-  const paragraphs = text.split(/\n\s*\n/);
-  let currentChunk = "";
-
-  for (const paragraph of paragraphs) {
-    if ((currentChunk + paragraph).length <= maxLength) {
-      currentChunk += (currentChunk ? "\n\n" : "") + paragraph;
-    } else {
-      // If current paragraph would exceed max length
-      if (currentChunk) {
-        chunks.push(currentChunk);
-        currentChunk = paragraph;
-      } else {
-        // If a single paragraph is too long, split it by sentences
-        const sentences = paragraph.match(/[^.!?]+[.!?]+/g) || [paragraph];
-        let sentenceChunk = "";
-
-        for (const sentence of sentences) {
-          if ((sentenceChunk + sentence).length <= maxLength) {
-            sentenceChunk += sentenceChunk ? " " + sentence : sentence;
-          } else {
-            if (sentenceChunk) {
-              chunks.push(sentenceChunk);
-              sentenceChunk = sentence;
-            } else {
-              // If a single sentence is too long, force split it
-              chunks.push(sentence.substring(0, maxLength));
-              sentenceChunk = sentence.substring(maxLength);
-            }
-          }
-        }
-
-        if (sentenceChunk) {
-          currentChunk = sentenceChunk;
-        }
-      }
-    }
-  }
-
-  if (currentChunk) {
-    chunks.push(currentChunk);
-  }
-
-  return chunks;
-}
-
-/**
  * Create a formatted PDF from notes
  */
 async function createPDF(
@@ -825,14 +756,10 @@ program
   .command("generate")
   .description("Generate notes from a video file or YouTube URL")
   .requiredOption("-i, --input <path>", "Path to video file or YouTube URL")
-  .option(
-    "-o, --output <path>",
-    "Output directory for the PDF",
-    "./notes"
-  )
+  .option("-o, --output <path>", "Output directory for the PDF", "./notes")
   .option(
     "-m, --model <model>",
-    "AI model to use (claude-3-opus, claude-3.5-sonnet, claude-3.7-sonnet, gpt-4-turbo, gpt-4o)",
+    "AI model to use (claude-3-opus, claude-3.5-sonnet, claude-3.7-sonnet, gpt-4-turbo, gpt-4)",
     "claude-3.7-sonnet"
   )
   .option("-l, --language <lang>", "Language of the notes", "english")
@@ -845,6 +772,18 @@ program
     "-d, --detail <level>",
     "Note detail level (standard, comprehensive, exhaustive)",
     "standard"
+  )
+  // Removed --min-pages and --max-pages options
+  .option(
+    "--vector-store",
+    "Use vector store for processing long transcripts",
+    false
+  )
+  .option("--vector-store-index <name>", "Vector store index name", "vidscript")
+  .option(
+    "--vector-store-namespace <namespace>",
+    "Vector store namespace",
+    "default"
   )
   .action(async (options) => {
     try {
@@ -877,7 +816,8 @@ program
       }
 
       // Process the video with our enhanced progress display
-      await processVideo(options as VideoOptions);
+      // Pass only the output option to PDF creation
+      await processVideo(options as any);
     } catch (error: unknown) {
       ui.showError("Error", (error as Error).message);
       process.exit(1);
@@ -916,6 +856,18 @@ program
           message: "Enter your OpenAI API key (for GPT models):",
           default: process.env.OPENAI_API_KEY || "",
         },
+        {
+          type: "input",
+          name: "pineconeKey",
+          message: "Enter your Pinecone API key (for processing long videos):",
+          default: process.env.PINECONE_API_KEY || "",
+        },
+        {
+          type: "input",
+          name: "pineconeEnv",
+          message: "Enter your Pinecone environment (e.g., gcp-starter):",
+          default: process.env.PINECONE_ENVIRONMENT || "gcp-starter",
+        },
       ]);
 
       // Create or update .env file
@@ -923,6 +875,8 @@ program
 # Video Notes Generator Configuration
 ANTHROPIC_API_KEY=${answers.anthropicKey}
 OPENAI_API_KEY=${answers.openaiKey}
+PINECONE_API_KEY=${answers.pineconeKey}
+PINECONE_ENVIRONMENT=${answers.pineconeEnv}
       `;
 
       ui.startSpinner("Saving configuration...");
@@ -931,7 +885,9 @@ OPENAI_API_KEY=${answers.openaiKey}
 
       ui.showInfo(
         "Next Steps",
-        'You can now use the "generate" command to create notes from videos.'
+        'You can now use the "generate" command to create notes from videos.\n\n' +
+          "For long videos, use the --vector-store flag to enable better processing:\n" +
+          "vidscript generate -i video.mp4 --vector-store --min-pages 5"
       );
       ui.showCommandExample();
     } catch (error: unknown) {
@@ -970,9 +926,7 @@ program
         ui.spinnerSuccess("Anthropic API key is configured");
       } else {
         ui.spinnerFail("Anthropic API key is not configured");
-        console.log(
-          chalk.yellow('Run "vidscript init" to configure API keys')
-        );
+        console.log(chalk.yellow('Run "vidscript init" to configure API keys'));
       }
 
       if (process.env.OPENAI_API_KEY) {
