@@ -1,6 +1,6 @@
 {
   "name": "vidscript",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "AI-powered CLI tool that transforms video content into intelligent, structured notes and scripts",
   "main": "dist/index.js",
   "type": "module",
