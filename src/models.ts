@@ -14,7 +14,7 @@ export const MODELS: ModelMap = {
   },
   "claude-3.7-sonnet": {
     provider: "anthropic",
-    modelName: "claude-3-7-sonnet-20240723",
+    modelName: "claude-3-7-sonnet-20250219",
     contextWindow: 200000,
   },
   // OpenAI models
